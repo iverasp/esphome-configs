@@ -149,6 +149,21 @@ binary_sensor:
 # ────────────────────────────────────────────────────────────
 sensor:
   - platform: homeassistant
+    id: sens_lux
+    entity_id: sensor.mmwave_light_intensity
+    on_value:
+      then:
+        - if:
+            condition:
+              lambda: "return x > 100.0f;"
+            then:
+              - light.turn_on:
+                  id: display_backlight
+            else:
+              - light.turn_off:
+                  id: display_backlight
+
+  - platform: homeassistant
     id: sens_temperature
     entity_id: ${ha_temperature}
     on_value:
@@ -231,7 +246,7 @@ light:
     name: "Display Backlight"
     id: display_backlight
     output: backlight_output
-    restore_mode: ALWAYS_ON
+    restore_mode: RESTORE_DEFAULT_OFF
     default_transition_length: 1s
 
 # ────────────────────────────────────────────────────────────
