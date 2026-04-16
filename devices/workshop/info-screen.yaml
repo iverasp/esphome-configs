@@ -1,0 +1,754 @@
+substitutions:
+  device_name: workshop-display
+  friendly_name: "Workshop Display"
+
+  ha_temperature: sensor.workshop_temp_and_humidity_temperature
+  ha_humidity:    sensor.workshop_temp_and_humidity_relative_humidity
+  ha_pressure:    sensor.workshop_temp_and_humidity_pressure
+  ha_aqi:         sensor.bme280_altitude
+
+# ────────────────────────────────────────────────────────────
+esphome:
+  name: ${device_name}
+  friendly_name: ${friendly_name}
+
+esp32:
+  board: esp32-s3-devkitc-1
+  variant: esp32s3
+  flash_size: 16MB
+  framework:
+    type: esp-idf
+    sdkconfig_options:
+      CONFIG_ESP32S3_DEFAULT_CPU_FREQ_240: "y"
+      CONFIG_ESP32S3_DATA_CACHE_64KB: "y"
+      CONFIG_ESP32S3_INSTRUCTION_CACHE_32KB: "y"
+      CONFIG_ESP_HTTPS_OTA_ALLOW_HTTP: "y"
+
+psram:
+  mode: octal
+  speed: 80MHz
+
+packages:
+  base: !include ../../packages/base.yaml
+
+# ────────────────────────────────────────────────────────────
+#  TIME  — used to drive the clock label
+# ────────────────────────────────────────────────────────────
+time:
+  - platform: homeassistant
+    id: ha_time
+    timezone: Europe/Oslo          # ← change to your timezone
+    on_time:
+      - seconds: /1                # every second
+        then:
+          - lvgl.label.update:
+              id: lbl_clock
+              text: !lambda |-
+                char buf[9];
+                auto t = id(ha_time).now();
+                snprintf(buf, sizeof(buf), "%02d:%02d:%02d",
+                         t.hour, t.minute, t.second);
+                return std::string(buf);
+      - seconds: 0
+        minutes: /1                # every minute update date
+        then:
+          - lvgl.label.update:
+              id: lbl_date
+              text: !lambda |-
+                static const char* days[]  = {"Sun","Mon","Tue","Wed","Thu","Fri","Sat"};
+                static const char* months[]= {"Jan","Feb","Mar","Apr","May","Jun",
+                                              "Jul","Aug","Sep","Oct","Nov","Dec"};
+                char buf[16];
+                auto t = id(ha_time).now();
+                snprintf(buf, sizeof(buf), "%s %02d %s",
+                         days[t.day_of_week-1], t.day_of_month, months[t.month-1]);
+                return std::string(buf);
+
+# ────────────────────────────────────────────────────────────
+#  GLOBAL VARIABLES  — timer state
+# ────────────────────────────────────────────────────────────
+globals:
+  - id: timer_running
+    type: bool
+    restore_value: false
+    initial_value: "false"
+
+  - id: timer_seconds
+    type: int
+    restore_value: false
+    initial_value: "0"
+
+  - id: timer_centiseconds
+    type: int
+    restore_value: false
+    initial_value: "0"
+
+# ────────────────────────────────────────────────────────────
+#  INTERVAL  — drives the stopwatch tick
+# ────────────────────────────────────────────────────────────
+interval:
+  - interval: 100ms
+    then:
+      - if:
+          condition:
+            lambda: "return id(timer_running);"
+          then:
+            - globals.set:
+                id: timer_centiseconds
+                value: !lambda "return id(timer_centiseconds) + 1;"
+            - globals.set:
+                id: timer_seconds
+                value: !lambda "return id(timer_centiseconds) / 10;"
+            - lvgl.label.update:
+                id: lbl_timer
+                text: !lambda |-
+                  int cs = id(timer_centiseconds);
+                  int s  = cs / 10;
+                  int c  = cs % 10;
+                  char buf[12];
+                  snprintf(buf, sizeof(buf), "%02d:%02d:%02d.%01d",
+                           s/3600, (s%3600)/60, s%60, c);
+                  return std::string(buf);
+
+# ────────────────────────────────────────────────────────────
+#  PHYSICAL BUTTON  — GPIO 1, toggles timer start/stop
+# ────────────────────────────────────────────────────────────
+binary_sensor:
+  - platform: gpio
+    id: btn_physical
+    pin:
+      number: GPIO1
+      mode:
+        input: true
+        pullup: true
+      inverted: true
+    filters:
+      - delayed_on: 20ms   # debounce
+    on_press:
+      then:
+        - if:
+            condition:
+              lambda: "return id(timer_running);"
+            then:
+              - globals.set:
+                  id: timer_running
+                  value: "false"
+              - lvgl.label.update:
+                  id: lbl_timer_state
+                  text: "PAUSED"
+            else:
+              - globals.set:
+                  id: timer_running
+                  value: "true"
+              - lvgl.label.update:
+                  id: lbl_timer_state
+                  text: "RUNNING"
+
+# ────────────────────────────────────────────────────────────
+#  HA SENSOR IMPORTS
+# ────────────────────────────────────────────────────────────
+sensor:
+  - platform: homeassistant
+    id: sens_temperature
+    entity_id: ${ha_temperature}
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: lbl_temp
+            text: !lambda |-
+              char buf[8];
+              snprintf(buf, sizeof(buf), "%.1f°C", x);
+              return std::string(buf);
+        - lvgl.bar.update:
+            id: bar_temp
+            value: !lambda "return (int)(x);"
+
+  - platform: homeassistant
+    id: sens_humidity
+    entity_id: ${ha_humidity}
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: lbl_humid
+            text: !lambda |-
+              char buf[8];
+              snprintf(buf, sizeof(buf), "%.0f%%", x);
+              return std::string(buf);
+        - lvgl.bar.update:
+            id: bar_humid
+            value: !lambda "return (int)x;"
+
+  - platform: homeassistant
+    id: sens_pressure
+    entity_id: ${ha_pressure}
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: lbl_press
+            text: !lambda |-
+              char buf[8];
+              snprintf(buf, sizeof(buf), "%.0f", x);
+              return std::string(buf);
+        - lvgl.bar.update:
+            id: bar_press
+            value: !lambda "return (int)(((x - 960.0f) / 100.0f) * 100);"
+
+  - platform: homeassistant
+    id: sens_aqi
+    entity_id: ${ha_aqi}
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: lbl_aqi
+            text: !lambda |-
+              char buf[8];
+              snprintf(buf, sizeof(buf), "%.0f", x);
+              return std::string(buf);
+        - lvgl.label.update:
+            id: lbl_aqi_status
+            text: !lambda |-
+              if (x <= 50)  return "GOOD";
+              if (x <= 100) return "MODERATE";
+              if (x <= 150) return "UNHEALTHY";
+              return "HAZARDOUS";
+        - lvgl.bar.update:
+            id: bar_aqi
+            value: !lambda "return (int)std::min(x / 2.0f, 100.0f);"
+
+# ────────────────────────────────────────────────────────────
+#  BACKLIGHT
+# ────────────────────────────────────────────────────────────
+output:
+  - platform: ledc
+    id: backlight_output
+    pin: GPIO38
+    frequency: 150Hz
+    min_power: 0.01
+    zero_means_zero: true
+
+light:
+  - platform: monochromatic
+    name: "Display Backlight"
+    id: display_backlight
+    output: backlight_output
+    restore_mode: ALWAYS_ON
+    default_transition_length: 1s
+
+# ────────────────────────────────────────────────────────────
+#  SPI (used by display init only, RGB parallel handles pixels)
+# ────────────────────────────────────────────────────────────
+spi:
+  - id: lcd_spi
+    clk_pin: GPIO48
+    mosi_pin: GPIO47
+
+# ────────────────────────────────────────────────────────────
+#  I²C (GT911 touch controller)
+# ────────────────────────────────────────────────────────────
+i2c:
+  id: i2c_touch
+  sda: GPIO19
+  scl:
+    number: GPIO45
+    ignore_strapping_warning: true
+
+# ────────────────────────────────────────────────────────────
+#  TOUCH
+# ────────────────────────────────────────────────────────────
+touchscreen:
+  - platform: gt911
+    id: touch_panel
+    i2c_id: i2c_touch
+    on_touch:
+      - lambda: |-
+          ESP_LOGI("touch", "Touch at (%d, %d)", touch.x, touch.y);
+
+# ────────────────────────────────────────────────────────────
+#  DISPLAY  (ST7701S via RGB parallel interface)
+# ────────────────────────────────────────────────────────────
+display:
+  - platform: st7701s
+    id: main_display
+    update_interval: never
+    auto_clear_enabled: false
+    data_rate: 2MHz
+    spi_mode: MODE3
+    color_order: RGB
+    invert_colors: false
+    dimensions:
+      width: 480
+      height: 480
+    cs_pin: 39
+    de_pin: 18
+    hsync_pin: 16
+    vsync_pin: 17
+    pclk_pin: 21
+    pclk_frequency: 12MHz
+    pclk_inverted: false
+    init_sequence:
+      - 1
+      - [0xFF, 0x77, 0x01, 0x00, 0x00, 0x10]
+      - [0xCD, 0x00]
+    data_pins:
+      red:   [11, 12, 13, 14, 0]
+      green: [8, 20, 3, 46, 9, 10]
+      blue:  [4, 5, 6, 7, 15]
+
+
+# ────────────────────────────────────────────────────────────
+#  FONTS
+# ────────────────────────────────────────────────────────────
+font:
+  - file: "gfonts://Share+Tech+Mono"
+    id: font_mono_48
+    size: 48
+    bpp: 4
+
+  - file: "gfonts://Share+Tech+Mono"
+    id: font_mono_36
+    size: 36
+    bpp: 4
+
+  - file: "gfonts://Share+Tech+Mono"
+    id: font_mono_28
+    size: 28
+    bpp: 4
+
+  - file: "gfonts://Rajdhani@700"
+    id: font_label_14
+    size: 14
+    bpp: 4
+    glyphs: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 °%.-"
+
+  - file: "gfonts://Rajdhani@500"
+    id: font_label_11
+    size: 11
+    bpp: 4
+    glyphs: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 °%.-"
+
+# ────────────────────────────────────────────────────────────
+#  LVGL
+# ────────────────────────────────────────────────────────────
+lvgl:
+  displays:
+    - main_display
+  touchscreens:
+    - touch_panel
+  buffer_size: 25%
+
+  # ── Global style ────────────────────────────────────────
+  theme:
+    button:
+      bg_color: 0x1A1F1A
+      border_color: 0x2A3028
+      border_width: 1
+      radius: 3
+      text_font: font_label_14
+
+  bg_color: 0x0D0F0E
+  color_depth: 16
+
+  # ── Pages ───────────────────────────────────────────────
+  pages:
+    - id: main_page
+      bg_color: 0x0D0F0E
+      widgets:
+
+        # ════════════════════════════════════════════════
+        #  ROOT CONTAINER — fills 480×480
+        # ════════════════════════════════════════════════
+        - obj:
+            width: 480
+            height: 480
+            pad_all: 6
+            bg_color: 0x0D0F0E
+            border_width: 0
+            layout:
+              type: FLEX
+              flex_flow: COLUMN
+
+            widgets:
+
+              # ══════════════════════════════════════════
+              #  TOP BAR — clock  (height 58)
+              # ══════════════════════════════════════════
+              - obj:
+                  id: top_bar
+                  width: 100%
+                  height: 56
+                  bg_color: 0x131715
+                  border_color: 0x2A3028
+                  border_width: 1
+                  radius: 4
+                  pad_left: 14
+                  pad_right: 14
+                  pad_top: 4
+                  pad_bottom: 4
+                  layout:
+                    type: FLEX
+                    flex_flow: ROW
+                    flex_align_main: SPACE_BETWEEN
+                    flex_align_cross: CENTER
+
+                  widgets:
+                    # "CLOCK" caption
+                    - label:
+                        text: "CURRENT TIME"
+                        text_font: font_label_11
+                        text_color: 0x556655
+
+                    # Large HH:MM:SS
+                    - label:
+                        id: lbl_clock
+                        text: "--:--:--"
+                        text_font: font_mono_36
+                        text_color: 0xF5C060
+
+                    # Date top-right
+                    - label:
+                        id: lbl_date
+                        text: "--- -- ---"
+                        text_font: font_label_11
+                        text_color: 0x7A4E08
+                        text_align: RIGHT
+
+              # ══════════════════════════════════════════
+              #  SENSOR GRID — 2×2 tiles  (fills remaining space above timer)
+              # ══════════════════════════════════════════
+              - obj:
+                  id: sensor_grid
+                  width: 100%
+                  height: 250
+                  bg_color: 0x131715
+                  border_color: 0x2A3028
+                  border_width: 1
+                  radius: 4
+                  pad_all: 0
+                  layout:
+                    type: GRID
+                    grid_columns: [FR(1), FR(1), CONTENT]
+                    grid_rows: [FR(1), FR(1), CONTENT]
+
+                  widgets:
+
+                    # ── TEMPERATURE ────────────────────
+                    - obj:
+                        id: tile_temp
+                        grid_cell_column_pos: 0
+                        grid_cell_column_span: 1
+                        grid_cell_row_pos: 0
+                        grid_cell_row_span: 1
+                        grid_cell_x_align: STRETCH
+                        grid_cell_y_align: STRETCH
+                        bg_color: 0x131715
+                        border_color: 0x2A3028
+                        border_width: 1
+                        border_side: [BOTTOM, RIGHT]
+                        radius: 0
+                        pad_left: 14
+                        pad_right: 10
+                        pad_top: 10
+                        pad_bottom: 6
+                        layout:
+                          type: FLEX
+                          flex_flow: COLUMN
+                          flex_align_main: SPACE_BETWEEN
+                        widgets:
+                          - label:
+                              text: "TEMPERATURE"
+                              text_font: font_label_11
+                              text_color: 0x556655
+                          - label:
+                              id: lbl_temp
+                              text: "--.-°C"
+                              text_font: font_mono_36
+                              text_color: 0xE07840
+                          - bar:
+                              id: bar_temp
+                              width: 100%
+                              height: 3
+                              value: 40
+                              min_value: 0
+                              max_value: 50
+                              bg_color: 0x2A3028
+                              indicator:
+                                bg_color: 0xE07840
+
+                    # ── HUMIDITY ──────────────────────
+                    - obj:
+                        id: tile_humid
+                        grid_cell_column_pos: 1
+                        grid_cell_column_span: 1
+                        grid_cell_row_pos: 0
+                        grid_cell_row_span: 1
+                        grid_cell_x_align: STRETCH
+                        grid_cell_y_align: STRETCH
+                        bg_color: 0x131715
+                        border_color: 0x2A3028
+                        border_width: 1
+                        border_side: [BOTTOM]
+                        radius: 0
+                        pad_left: 14
+                        pad_right: 10
+                        pad_top: 10
+                        pad_bottom: 6
+                        layout:
+                          type: FLEX
+                          flex_flow: COLUMN
+                          flex_align_main: SPACE_BETWEEN
+                        widgets:
+                          - label:
+                              text: "HUMIDITY"
+                              text_font: font_label_11
+                              text_color: 0x556655
+                          - label:
+                              id: lbl_humid
+                              text: "--%"
+                              text_font: font_mono_36
+                              text_color: 0x5AB4E0
+                          - bar:
+                              id: bar_humid
+                              width: 100%
+                              height: 3
+                              value: 5
+                              min_value: 0
+                              max_value: 100
+                              bg_color: 0x2A3028
+                              indicator:
+                                bg_color: 0x5AB4E0
+
+                    # ── PRESSURE ──────────────────────
+                    - obj:
+                        id: tile_press
+                        grid_cell_column_pos: 0
+                        grid_cell_column_span: 1
+                        grid_cell_row_pos: 1
+                        grid_cell_row_span: 1
+                        grid_cell_x_align: STRETCH
+                        grid_cell_y_align: STRETCH
+                        bg_color: 0x131715
+                        border_color: 0x2A3028
+                        border_width: 1
+                        border_side: [RIGHT]
+                        radius: 0
+                        pad_left: 14
+                        pad_right: 10
+                        pad_top: 10
+                        pad_bottom: 6
+                        layout:
+                          type: FLEX
+                          flex_flow: COLUMN
+                          flex_align_main: SPACE_BETWEEN
+                        widgets:
+                          - label:
+                              text: "AIR PRESSURE"
+                              text_font: font_label_11
+                              text_color: 0x556655
+                          - label:
+                              id: lbl_press
+                              text: "----"
+                              text_font: font_mono_28
+                              text_color: 0xA8C4A0
+                          - label:
+                              text: "hPa"
+                              text_font: font_label_11
+                              text_color: 0x556655
+                          - bar:
+                              id: bar_press
+                              width: 100%
+                              height: 3
+                              value: 50
+                              min_value: 0
+                              max_value: 100
+                              bg_color: 0x2A3028
+                              indicator:
+                                bg_color: 0xA8C4A0
+
+                    # ── AIR QUALITY ───────────────────
+                    - obj:
+                        id: tile_aqi
+                        grid_cell_column_pos: 1
+                        grid_cell_column_span: 1
+                        grid_cell_row_pos: 1
+                        grid_cell_row_span: 1
+                        grid_cell_x_align: STRETCH
+                        grid_cell_y_align: STRETCH
+                        bg_color: 0x131715
+                        border_color: 0x2A3028
+                        border_width: 0
+                        radius: 0
+                        pad_left: 14
+                        pad_right: 10
+                        pad_top: 10
+                        pad_bottom: 6
+                        layout:
+                          type: FLEX
+                          flex_flow: COLUMN
+                          flex_align_main: SPACE_BETWEEN
+                        widgets:
+                          - label:
+                              text: "AIR QUALITY"
+                              text_font: font_label_11
+                              text_color: 0x556655
+                          - label:
+                              id: lbl_aqi
+                              text: "--"
+                              text_font: font_mono_36
+                              text_color: 0x4ECB71
+                          - label:
+                              id: lbl_aqi_status
+                              text: "---"
+                              text_font: font_label_11
+                              text_color: 0x4ECB71
+                          - bar:
+                              id: bar_aqi
+                              width: 100%
+                              height: 3
+                              value: 20
+                              min_value: 0
+                              max_value: 100
+                              bg_color: 0x2A3028
+                              indicator:
+                                bg_color: 0x4ECB71
+
+              # ══════════════════════════════════════════
+              #  BOTTOM BAR — stopwatch timer  (height 148)
+              # ══════════════════════════════════════════
+              - obj:
+                  id: timer_bar
+                  width: 100%
+                  height: 146
+                  bg_color: 0x131715
+                  border_color: 0x2A3028
+                  border_width: 1
+                  radius: 4
+                  pad_left: 14
+                  pad_right: 14
+                  pad_top: 8
+                  pad_bottom: 10
+
+                  widgets:
+
+                    # Header row
+                    - label:
+                        text: "TIMER"
+                        text_font: font_label_11
+                        text_color: 0x556655
+                        x: 0
+                        y: 0
+
+                    - label:
+                        id: lbl_timer_state
+                        text: "STOPPED"
+                        text_font: font_label_11
+                        text_color: 0x7A4E08
+                        align: TOP_RIGHT
+                        y: 0
+
+                    # Large timer readout
+                    - label:
+                        id: lbl_timer
+                        text: "00:00:00.0"
+                        text_font: font_mono_48
+                        text_color: 0xE8A020
+                        align: CENTER
+                        y: -12
+
+                    # Button row
+                    - obj:
+                        align: BOTTOM_MID
+                        width: 100%
+                        height: 42
+                        bg_opa: TRANSP
+                        border_width: 0
+                        pad_all: 0
+                        layout:
+                          type: FLEX
+                          flex_flow: ROW
+                          flex_align_main: SPACE_BETWEEN
+
+                        widgets:
+
+                          # START
+                          - button:
+                              id: btn_start
+                              flex_grow: 1
+                              height: 42
+                              bg_color: 0x1A1F1A
+                              border_color: 0x2A6632
+                              text_color: 0x4ECB71
+                              widgets:
+                                - label:
+                                    text: "START"
+                                    align: CENTER
+                                    text_font: font_label_14
+                                    text_color: 0x4ECB71
+                              on_click:
+                                then:
+                                  - if:
+                                      condition:
+                                        lambda: "return !id(timer_running);"
+                                      then:
+                                        - globals.set:
+                                            id: timer_running
+                                            value: "true"
+                                        - lvgl.label.update:
+                                            id: lbl_timer_state
+                                            text: "RUNNING"
+
+                          # STOP
+                          - button:
+                              id: btn_stop
+                              flex_grow: 1
+                              height: 42
+                              bg_color: 0x1A1F1A
+                              border_color: 0x661A1A
+                              widgets:
+                                - label:
+                                    text: "STOP"
+                                    align: CENTER
+                                    text_font: font_label_14
+                                    text_color: 0xE05050
+                              on_click:
+                                then:
+                                  - if:
+                                      condition:
+                                        lambda: "return id(timer_running);"
+                                      then:
+                                        - globals.set:
+                                            id: timer_running
+                                            value: "false"
+                                        - lvgl.label.update:
+                                            id: lbl_timer_state
+                                            text: "PAUSED"
+
+                          # RESET
+                          - button:
+                              id: btn_reset
+                              width: 80
+                              height: 42
+                              bg_color: 0x1A1F1A
+                              border_color: 0x3A3010
+                              widgets:
+                                - label:
+                                    text: "RESET"
+                                    align: CENTER
+                                    text_font: font_label_14
+                                    text_color: 0x7A4E08
+                              on_click:
+                                then:
+                                  - globals.set:
+                                      id: timer_running
+                                      value: "false"
+                                  - globals.set:
+                                      id: timer_seconds
+                                      value: "0"
+                                  - globals.set:
+                                      id: timer_centiseconds
+                                      value: "0"
+                                  - lvgl.label.update:
+                                      id: lbl_timer
+                                      text: "00:00:00.0"
+                                  - lvgl.label.update:
+                                      id: lbl_timer_state
+                                      text: "STOPPED"
