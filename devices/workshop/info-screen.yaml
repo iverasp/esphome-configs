@@ -6,6 +6,7 @@ substitutions:
   ha_humidity:    sensor.workshop_temp_and_humidity_relative_humidity
   ha_pressure:    sensor.workshop_temp_and_humidity_pressure
   ha_aqi:         sensor.bme280_altitude
+  ha_lux:         sensor.mmwave_light_intensity
 
 # ────────────────────────────────────────────────────────────
 esphome:
@@ -150,7 +151,7 @@ binary_sensor:
 sensor:
   - platform: homeassistant
     id: sens_lux
-    entity_id: sensor.mmwave_light_intensity
+    entity_id: ${ha_lux}
     on_value:
       then:
         - if:
