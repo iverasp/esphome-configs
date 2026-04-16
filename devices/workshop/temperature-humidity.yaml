@@ -1,0 +1,18 @@
+substitutions:
+  device_name: workshop-temperature-humidity
+  friendly_name: Workshop temp and humidity
+  pin_sda: GPIO26
+  pin_scl: GPIO25
+
+esphome:
+  name: ${device_name}
+  friendly_name: ${friendly_name}
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+packages:
+  base: !include ../../packages/base.yaml
+  sensor: !include ../../packages/sensors/bme280-i2c/bme280-i2c.yaml

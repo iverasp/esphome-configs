@@ -1,0 +1,156 @@
+esphome:
+  name: ${device_name}
+  friendly_name: ${friendly_name}
+  platformio_options:
+    custom_versions.beken-bdk: 3.0.78
+
+bk72xx:
+  board: generic-bk7238-tuya # use this if you have a Tuya device, remove "-tuya" suffix if you don't (unlikely)
+  family: BK7231N # workaround for ESPHome not knowing what a BK7238 is, doesn't cause any problems
+  framework: 
+    version: 0.0.0
+    source: https://github.com/libretiny-eu/libretiny#feature/bk7238
+
+deep_sleep:
+  sleep_duration: 12h
+  run_duration: 60s
+  wakeup_pin:
+    - pin:
+        number: P15
+        allow_other_uses: true
+        inverted: true
+      wakeup_pin_mode: INVERT_WAKEUP
+    - pin:
+        number: P21
+        allow_other_uses: true
+        inverted: true
+      wakeup_pin_mode: INVERT_WAKEUP
+
+# ── Outputs ────────────────────────────────────────────────────────────────────
+
+output:
+  - platform: gpio
+    id: red_led_output
+    pin:
+      number: P17
+      inverted: false
+
+# ── Status LED — flashes while running, solid on smoke ─────────────────────────
+
+light:
+  - platform: binary
+    id: red_led
+    output: red_led_output
+    name: "Status LED"
+    internal: true        # don't expose to HA directly; controlled by automations
+
+interval:
+  - interval: 10000ms
+    id: heartbeat_flash
+    then:
+      - if:
+          condition:
+            binary_sensor.is_off: smoke_detected
+          then:
+            - output.turn_on: red_led_output
+            - delay: 100ms
+            - output.turn_off: red_led_output
+
+# ── Smoke sensor ───────────────────────────────────────────────────────────────
+
+binary_sensor:
+  - platform: gpio
+    name: "Smoke Detected"
+    id: smoke_detected
+    pin:
+      number: P15        # pin 21
+      mode: INPUT
+      allow_other_uses: true
+    device_class: smoke
+    on_press:
+      then:
+        # Cancel heartbeat flash, hold LED solid
+        - output.turn_on: red_led_output
+    on_release:
+      then:
+        # Smoke cleared — heartbeat loop will resume naturally
+        - output.turn_off: red_led_output
+
+# ── Tamper switch ─────────────────────────────────────────────────────────────
+
+  - platform: gpio
+    name: "Tamper"
+    id: tamper_switch
+    pin:
+      number: P21         # pin 19
+      mode: INPUT
+      allow_other_uses: true
+      inverted: true
+    device_class: tamper
+    # Wakes device on deep-sleep platforms; on always-on WiFi devices this
+    # simply reports the state change immediately.
+    # wakeup_pin: true
+
+# ── Battery voltage ───────────────────────────────────────────────────────────
+
+# sensor:
+#   - platform: adc
+#     name: "Battery Voltage"
+#     id: battery_voltage
+#     pin: P20             # pin 5 — BK7238 single ADC input
+#     attenuation: auto
+#     # The 100k/100k divider halves the battery voltage before the ADC.
+#     # Multiply raw reading by 2 to recover true battery voltage.
+#     filters:
+#       - multiply: 2.0
+#       - median:
+#           window_size: 5
+#           send_every: 5
+#     update_interval: 60s
+#     unit_of_measurement: "V"
+#     accuracy_decimals: 2
+#     device_class: voltage
+#     state_class: measurement
+#     # Gate pin: pull P26 high to enable the divider, sample, then release.
+#     on_value:
+#       - then: []          # value already published; nothing extra needed here
+
+#   # Derived battery percentage (adjust voltage thresholds to match your battery)
+#   - platform: copy
+#     name: "Battery"
+#     source_id: battery_voltage
+#     device_class: battery
+#     unit_of_measurement: "%"
+#     accuracy_decimals: 0
+#     filters:
+#       # Linear map: 3.0 V = 0 %, 4.2 V = 100 % (Li-ion example — adjust for your cell)
+#       - calibrate_linear:
+#           - 3.0 -> 0
+#           - 4.2 -> 100
+#       - clamp:
+#           min_value: 0
+#           max_value: 100
+
+# # ── P26 ADC gate pin (power the voltage divider only during sampling) ──────────
+
+# switch:
+#   - platform: gpio
+#     id: adc_enable
+#     pin:
+#       number: P26        # pin 11
+#       mode: OUTPUT
+#     restore_mode: ALWAYS_OFF
+#     internal: true
+
+# # Fire the gate: enable → sample → disable, on the same schedule as the ADC
+# time:
+#   - platform: sntp   # or remove if you handle timing another way
+#     on_time:
+#       - seconds: 0
+#         minutes: /1      # every minute, matching update_interval above
+#         then:
+#           - switch.turn_on: adc_enable
+#           - delay: 200ms   # allow RC (100k × 100nF = 10 µs; 200 ms is very safe)
+#           - component.update: battery_voltage
+#           - delay: 100ms
+#           - switch.turn_off: adc_enable

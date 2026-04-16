@@ -1,0 +1,7 @@
+substitutions:
+  device_name: 3d-printer-plug
+  friendly_name: 3D printer plug
+
+packages:
+  base: !include ../../packages/base.yaml
+  plug: !include ../../packages/devices/ledvance-smart-plus-plug/ledvance-smart-plus-plug.yaml

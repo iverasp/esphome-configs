@@ -1,0 +1,7 @@
+substitutions:
+  device_name: workshop-presence
+  friendly_name: Workshop presence
+
+packages:
+  base: !include ../../packages/base.yaml
+  plug: !include ../../packages/devices/zy-hps01/zy-hps01.yaml
