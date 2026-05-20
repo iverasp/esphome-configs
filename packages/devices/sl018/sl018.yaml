@@ -1,0 +1,40 @@
+sl018:
+  id: rfid_reader
+  address: 0x50
+  i2c_id: i2c_bus
+  tag_pin:
+    number: ${pin_tag}
+    mode:
+      input: true
+      pullup: true
+  update_interval: 100ms
+  tag_uid:
+    id: rfid_tag_uid
+    name: "RFID Tag Text"
+    on_value:
+      then:
+        - if:
+            condition:
+              lambda: 'return !x.empty();'
+            then:
+              - logger.log:
+                  format: "Calling %s with media_id='%s' on %s"
+                  args: ["\"${ma_action}\"", "x.c_str()", "\"${ma_player}\""]
+              - homeassistant.action:
+                  action: ${ma_action}
+                  data:
+                    entity_id: ${ma_player}
+                    media_id: !lambda 'return x;'
+                    media_type: ${ma_media_type}
+                    enqueue: ${ma_enqueue}
+            else:
+              - homeassistant.action:
+                  action: media_player.media_stop
+                  data:
+                    entity_id: ${ma_player}
+
+i2c:
+  sda: ${pin_sda}
+  scl: ${pin_scl}
+  scan: true
+  id: i2c_bus

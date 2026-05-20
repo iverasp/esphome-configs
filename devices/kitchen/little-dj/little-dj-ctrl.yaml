@@ -1,0 +1,32 @@
+substitutions:
+  device_name: little-dj-ctrl
+  friendly_name: Little DJ Ctrl
+  # ── SL018 I2C pins ───────────────────────────────────────────────────────
+  pin_sda: GPIO32
+  pin_scl: GPIO33
+  # ── SL018 TAG pin (active LOW: pulled low by reader when card is present) ─
+  pin_tag: GPIO25
+  # ── Music Assistant ───────────────────────────────────────────────────────
+  ma_player: media_player.kitchen
+  ma_action: music_assistant.play_media
+  ma_media_type: track
+  ma_enqueue: replace
+
+esphome:
+  name: ${device_name}
+  friendly_name: ${friendly_name}
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+packages:
+  base: !include ../../../packages/base.yaml
+  sl018: !include ../../../packages/devices/sl018/sl018.yaml
+
+external_components:
+  - source:
+      type: local
+      path: ../../../packages/devices/sl018/components
+    components: [sl018]
