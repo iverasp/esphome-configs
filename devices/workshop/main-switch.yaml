@@ -1,0 +1,15 @@
+substitutions:
+  device_name: workshop-main-switch
+  friendly_name: "Workshop main switch"
+
+packages:
+  base: !include ../../packages/base.yaml
+  device: !include ../../packages/devices/shelly-1pm-gen3/shelly-1pm-gen3.yaml
+
+switch:
+  - platform: output
+    id: relay
+    name: Relay
+    output: shelly_1pm_gen3_relay
+    device_class: outlet
+    restore_mode: RESTORE_DEFAULT_OFF
