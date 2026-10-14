@@ -1,0 +1,14 @@
+# Kindergarten info ("Barnehage i dag") from Home Assistant, shown in the
+# right column of the home page.
+
+substitutions:
+  kindergarten_entity: sensor.barnehage_i_dag
+
+text_sensor:
+  - platform: homeassistant
+    id: ha_kindergarten_today
+    entity_id: ${kindergarten_entity}
+    attribute: content
+    internal: true
+    on_value:
+      - lambda: lv_label_set_text(id(kindergarten_text), x.c_str());

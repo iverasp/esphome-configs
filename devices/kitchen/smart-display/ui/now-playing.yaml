@@ -1,0 +1,168 @@
+# "Now playing" for Sendspin (Music Assistant): artwork, title, artist,
+# progress and transport controls. Widgets are in home-page.yaml (card) and
+# now-playing-page.yaml (full screen); this file holds the Sendspin client and
+# pushes its data into both.
+#
+# The display has the metadata, artwork and controller roles (no audio). In
+# Music Assistant, add/group it with the player whose playback it should
+# mirror and control.
+
+sendspin:
+  id: sendspin_hub
+  task_stack_in_psram: true
+
+# Controller role: play/pause/next/previous + playback state. Internal so it
+# doesn't show up as a media player in Home Assistant.
+media_player:
+  - platform: sendspin
+    id: np_player
+    internal: true
+    on_state:
+      - script.execute: np_refresh_play_icon
+
+font:
+  - file: ${mdi_font_url}
+    id: font_np_icons
+    size: 96
+    bpp: 4
+    glyphs:
+      - "\U000F075A" # music (shown when there is no artwork)
+  - file: ${mdi_font_url}
+    id: font_np_controls
+    size: 44
+    bpp: 4
+    glyphs: &np_control_glyphs
+      - "\U000F04AE" # skip-previous
+      - "\U000F040A" # play
+      - "\U000F03E4" # pause
+      - "\U000F04AD" # skip-next
+      - "\U000F0140" # chevron-down (minimise)
+  - file: ${mdi_font_url}
+    id: font_np_controls_l
+    size: 80
+    bpp: 4
+    glyphs: *np_control_glyphs
+
+image:
+  # Small artwork for the home page card.
+  - platform: sendspin
+    id: np_artwork_slot
+    source: ALBUM
+    format: JPEG
+    type: RGB565
+    resize: 200x200
+    current_image:
+      id: np_artwork
+    on_image_display:
+      - lvgl.image.update:
+          id: np_artwork_widget
+          src: np_artwork
+      - lvgl.widget.show: np_artwork_widget
+      - lvgl.widget.hide: np_artwork_placeholder
+    on_image_clear:
+      - lvgl.widget.hide: np_artwork_widget
+      - lvgl.widget.show: np_artwork_placeholder
+    on_image_error:
+      - lvgl.widget.hide: np_artwork_widget
+      - lvgl.widget.show: np_artwork_placeholder
+  # Large artwork for the full-screen page (2 x 800 KB buffers in PSRAM).
+  - platform: sendspin
+    id: np_full_artwork_slot
+    source: ALBUM
+    format: JPEG
+    type: RGB565
+    resize: 640x640
+    current_image:
+      id: np_full_artwork
+    on_image_display:
+      - lvgl.image.update:
+          id: np_full_artwork_widget
+          src: np_full_artwork
+      - lvgl.widget.show: np_full_artwork_widget
+      - lvgl.widget.hide: np_full_artwork_placeholder
+    on_image_clear:
+      - lvgl.widget.hide: np_full_artwork_widget
+      - lvgl.widget.show: np_full_artwork_placeholder
+    on_image_error:
+      - lvgl.widget.hide: np_full_artwork_widget
+      - lvgl.widget.show: np_full_artwork_placeholder
+
+text_sensor:
+  - platform: sendspin
+    id: np_title
+    type: title
+    internal: true
+    on_value:
+      - lambda: |-
+          // The card is always shown; fall back to a placeholder title.
+          const char *title = x.empty() ? "Not playing" : x.c_str();
+          lv_label_set_text(id(np_title_label), title);
+          lv_label_set_text(id(np_full_title_label), title);
+  - platform: sendspin
+    id: np_artist
+    type: artist
+    internal: true
+    on_value:
+      - lambda: |-
+          lv_label_set_text(id(np_artist_label), x.c_str());
+          lv_label_set_text(id(np_full_artist_label), x.c_str());
+
+sensor:
+  - platform: sendspin
+    id: np_progress
+    type: track_progress
+    internal: true
+    on_value:
+      - script.execute: np_refresh_progress
+  - platform: sendspin
+    id: np_duration
+    type: track_duration
+    internal: true
+    on_value:
+      - script.execute: np_refresh_progress
+
+script:
+  - id: np_refresh_progress
+    mode: single
+    then:
+      - lambda: |-
+          auto fmt = [](float ms, char *buf, size_t len) {
+            if (std::isnan(ms) || ms < 0) {
+              snprintf(buf, len, "-:--");
+              return;
+            }
+            unsigned s = (unsigned) (ms / 1000.0f);
+            snprintf(buf, len, "%u:%02u", s / 60, s % 60);
+          };
+          float pos = id(np_progress).state;
+          float dur = id(np_duration).state;
+          char buf[16];
+          fmt(pos, buf, sizeof(buf));
+          lv_label_set_text(id(np_pos_label), buf);
+          lv_label_set_text(id(np_full_pos_label), buf);
+          fmt(dur, buf, sizeof(buf));
+          lv_label_set_text(id(np_dur_label), buf);
+          lv_label_set_text(id(np_full_dur_label), buf);
+          int32_t v = 0;
+          if (!std::isnan(pos) && !std::isnan(dur) && dur > 0)
+            v = (int32_t) std::min(1000.0f, std::max(0.0f, pos * 1000.0f / dur));
+          lv_bar_set_value(id(np_bar), v, LV_ANIM_OFF);
+          lv_bar_set_value(id(np_full_bar), v, LV_ANIM_OFF);
+
+  # Show pause while playing, play otherwise.
+  - id: np_refresh_play_icon
+    mode: single
+    then:
+      - lambda: |-
+          bool playing = id(np_player).state == media_player::MEDIA_PLAYER_STATE_PLAYING;
+          const char *icon = playing ? "\U000F03E4" : "\U000F040A";
+          lv_label_set_text(id(np_play_icon), icon);
+          lv_label_set_text(id(np_full_play_icon), icon);
+
+  - id: np_close_full
+    mode: single
+    then:
+      - lvgl.page.show:
+          id: home_page
+          animation: FADE_IN
+          time: 250ms

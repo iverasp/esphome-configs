@@ -1,0 +1,87 @@
+# Clock, date and current weather for the upper-left card on the home page.
+
+substitutions:
+  weather_entity: weather.met
+  mdi_font_url: "https://github.com/Pictogrammers/pictogrammers.github.io/raw/main/@mdi/font/7.4.47/fonts/materialdesignicons-webfont.ttf"
+
+font:
+  - file:
+      type: gfonts
+      family: Roboto
+      weight: 300
+    id: font_clock
+    size: 112
+    bpp: 4
+    glyphs: "0123456789:-"
+
+  # Must contain every glyph returned by the condition mapping below.
+  - file: ${mdi_font_url}
+    id: font_weather_icons
+    size: 44
+    bpp: 4
+    glyphs:
+      - "\U000F0590" # cloudy
+      - "\U000F0591" # fog
+      - "\U000F0592" # hail
+      - "\U000F0593" # lightning
+      - "\U000F0594" # clear-night
+      - "\U000F0595" # partly-cloudy
+      - "\U000F0596" # pouring
+      - "\U000F0597" # rainy
+      - "\U000F0598" # snowy
+      - "\U000F0599" # sunny
+      - "\U000F059D" # windy
+      - "\U000F059E" # windy-variant
+      - "\U000F067E" # lightning-rainy
+      - "\U000F067F" # snowy-rainy
+      - "\U000F05D6" # alert-circle-outline (exceptional / unknown)
+
+interval:
+  - interval: 1s
+    then:
+      - lambda: |-
+          auto now = id(homeassistant_time).now();
+          if (!now.is_valid())
+            return;
+          lv_label_set_text(id(clock_label), now.strftime("%H:%M").c_str());
+          // Norwegian date, e.g. "tir. 22. apr.". strftime only knows the C
+          // locale, so day/month names come from lookup tables.
+          // day_of_week: 1 = Sunday .. 7 = Saturday; month: 1 .. 12.
+          static const char *const days[] = {"søn.", "man.", "tir.", "ons.", "tor.", "fre.", "lør."};
+          static const char *const months[] = {"jan.", "feb.", "mar.", "apr.", "mai", "jun.",
+                                               "jul.", "aug.", "sep.", "okt.", "nov.", "des."};
+          char date[32];
+          snprintf(date, sizeof(date), "%s %u. %s", days[now.day_of_week - 1],
+                   (unsigned) now.day_of_month, months[now.month - 1]);
+          lv_label_set_text(id(date_label), date);
+
+text_sensor:
+  - platform: homeassistant
+    id: ha_weather_condition
+    entity_id: ${weather_entity}
+    internal: true
+    on_value:
+      - lambda: |-
+          static const std::map<std::string, const char *> icons = {
+              {"clear-night", "\U000F0594"},     {"cloudy", "\U000F0590"},
+              {"fog", "\U000F0591"},             {"hail", "\U000F0592"},
+              {"lightning", "\U000F0593"},       {"lightning-rainy", "\U000F067E"},
+              {"partlycloudy", "\U000F0595"},    {"pouring", "\U000F0596"},
+              {"rainy", "\U000F0597"},           {"snowy", "\U000F0598"},
+              {"snowy-rainy", "\U000F067F"},     {"sunny", "\U000F0599"},
+              {"windy", "\U000F059D"},           {"windy-variant", "\U000F059E"},
+          };
+          auto it = icons.find(x);
+          lv_label_set_text(id(weather_icon), it != icons.end() ? it->second : "\U000F05D6");
+
+sensor:
+  - platform: homeassistant
+    id: ha_weather_temperature
+    entity_id: ${weather_entity}
+    attribute: temperature
+    internal: true
+    on_value:
+      - lambda: |-
+          char buf[16];
+          snprintf(buf, sizeof(buf), "%.0f°C", x);
+          lv_label_set_text(id(weather_temp), buf);

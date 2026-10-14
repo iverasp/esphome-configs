@@ -1,0 +1,244 @@
+# Home page: background photo with the "Barnehage i dag" card on top.
+
+image:
+  # background.jpg is 6000x4000 (3:2). Resizing keeps the aspect ratio, so it
+  # is scaled to 1280x853 and centred, cropping ~26px top and bottom.
+  - platform: file
+    # Path is relative to smart-display.yaml.
+    file: background.jpg
+    id: background_image
+    type: RGB565
+    resize: 1280x854
+
+lvgl:
+  pages:
+    - id: home_page
+      bg_color: 0x000000
+      scrollable: false
+      widgets:
+        - image:
+            id: background
+            src: background_image
+            align: CENTER
+
+        # --- Upper left: clock / date / weather (updated in clock-weather.yaml)
+        - obj:
+            id: clock_card
+            styles: style_card
+            bg_opa: 75%
+            x: 30
+            y: 30
+            width: 380
+            height: 300
+            pad_all: 24
+            scrollable: false
+            layout:
+              type: flex
+              flex_flow: COLUMN
+              flex_align_main: START
+              flex_align_cross: START
+              pad_row: 4
+            widgets:
+              - label:
+                  id: clock_label
+                  text: "--:--"
+                  text_font: font_clock
+                  styles: style_text
+              - label:
+                  id: date_label
+                  text: ""
+                  text_font: font_m
+                  styles: style_muted
+              - obj:
+                  styles: style_transparent
+                  width: SIZE_CONTENT
+                  height: SIZE_CONTENT
+                  pad_top: 10
+                  scrollable: false
+                  layout:
+                    type: flex
+                    flex_flow: ROW
+                    flex_align_cross: CENTER
+                    pad_column: 12
+                  widgets:
+                    - label:
+                        id: weather_icon
+                        text: "\U000F05D6"
+                        text_font: font_weather_icons
+                        styles: style_text
+                    - label:
+                        id: weather_temp
+                        text: "--°C"
+                        text_font: font_m
+                        styles: style_text
+
+        # --- Lower left: now playing (Sendspin, see now-playing.yaml) ---------
+        # Always shown; "Not playing" when nothing is loaded.
+        - obj:
+            id: now_playing_card
+            styles: style_card
+            bg_opa: 75%
+            x: 30
+            y: 350
+            width: 380
+            height: 420
+            pad_all: 24
+            scrollable: false
+            widgets:
+              # Artwork, with a music icon underneath when there is none.
+              # Tap to open the full-screen player (now-playing-page.yaml).
+              - obj:
+                  id: np_artwork_box
+                  align: TOP_MID
+                  width: 200
+                  height: 200
+                  radius: 12
+                  bg_color: 0x2A2D34
+                  border_width: 0
+                  pad_all: 0
+                  clip_corner: true
+                  scrollable: false
+                  clickable: true
+                  on_click:
+                    - lvgl.page.show:
+                        id: now_playing_page
+                        animation: FADE_IN
+                        time: 250ms
+                  widgets:
+                    - label:
+                        id: np_artwork_placeholder
+                        align: CENTER
+                        clickable: false
+                        text: "\U000F075A"
+                        text_font: font_np_icons
+                        styles: style_muted
+                    - image:
+                        id: np_artwork_widget
+                        align: CENTER
+                        clickable: false
+                        src: np_artwork
+                        hidden: true
+              - label:
+                  id: np_title_label
+                  y: 208
+                  width: 100%
+                  long_mode: dot
+                  text_align: CENTER
+                  text: "Not playing"
+                  text_font: font_s
+                  styles: style_text
+              - label:
+                  id: np_artist_label
+                  y: 236
+                  width: 100%
+                  long_mode: dot
+                  text_align: CENTER
+                  text: ""
+                  text_font: font_s
+                  styles: style_muted
+              - bar:
+                  id: np_bar
+                  y: 274
+                  width: 100%
+                  height: 6
+                  min_value: 0
+                  max_value: 1000
+                  value: 0
+                  bg_color: 0x2A2D34
+                  indicator:
+                    bg_color: 0xFFFFFF
+              - label:
+                  id: np_pos_label
+                  y: 284
+                  text: "-:--"
+                  text_font: font_s
+                  styles: style_muted
+              - label:
+                  id: np_dur_label
+                  align: TOP_RIGHT
+                  y: 284
+                  text: "-:--"
+                  text_font: font_s
+                  styles: style_muted
+              # Controls: previous / play-pause / next.
+              - obj:
+                  styles: style_transparent
+                  align: BOTTOM_MID
+                  width: 100%
+                  height: 56
+                  scrollable: false
+                  layout:
+                    type: flex
+                    flex_flow: ROW
+                    flex_align_main: SPACE_EVENLY
+                    flex_align_cross: CENTER
+                  widgets:
+                    - button:
+                        styles: style_icon_button
+                        width: 64
+                        height: 56
+                        on_click:
+                          - media_player.previous: np_player
+                        widgets:
+                          - label:
+                              align: CENTER
+                              text: "\U000F04AE"
+                              text_font: font_np_controls
+                    - button:
+                        styles: style_icon_button
+                        width: 64
+                        height: 56
+                        on_click:
+                          - media_player.toggle: np_player
+                        widgets:
+                          - label:
+                              id: np_play_icon
+                              align: CENTER
+                              text: "\U000F040A"
+                              text_font: font_np_controls
+                    - button:
+                        styles: style_icon_button
+                        width: 64
+                        height: 56
+                        on_click:
+                          - media_player.next: np_player
+                        widgets:
+                          - label:
+                              align: CENTER
+                              text: "\U000F04AD"
+                              text_font: font_np_controls
+
+        # --- Right: Barnehage i dag -------------------------------------------
+        - obj:
+            id: kindergarten_card
+            styles: style_card
+            # Semi-transparent so the background shows through.
+            bg_opa: 75%
+            x: 440
+            y: 30
+            width: 810
+            height: 740
+            pad_all: 28
+            scrollable: false
+            widgets:
+              - label:
+                  align: TOP_LEFT
+                  text: "Barnehage i dag"
+                  text_font: font_m
+                  styles: style_muted
+              - obj:
+                  styles: style_transparent
+                  y: 56
+                  width: 100%
+                  height: 628
+                  scrollable: true
+                  scrollbar_mode: AUTO
+                  widgets:
+                    - label:
+                        id: kindergarten_text
+                        width: 100%
+                        long_mode: wrap
+                        text: ""
+                        text_font: font_s
+                        text_line_space: 6
+                        styles: style_text

@@ -1,0 +1,58 @@
+substitutions:
+  device_name: kitchen-smart-display
+  friendly_name: Kitchen smart display
+  # LVGL rotation in degrees. The panel is natively 800x1280 portrait;
+  # 90 gives landscape (1280x800).
+  display_rotation: "90"
+
+# UI (landscape 1280x800):
+#   ui/theme.yaml        fonts, colours and shared styles
+#   ui/home-page.yaml    home page layout (clock card + "Barnehage i dag" card)
+#   ui/clock-weather.yaml clock/date/weather data for the upper-left card
+#   ui/kindergarten.yaml Home Assistant sensor feeding the card
+#   ui/now-playing.yaml  Sendspin client feeding the "now playing" card/page
+#   ui/now-playing-page.yaml full-screen player (tap the artwork)
+packages:
+  base: !include ../../../packages/base.yaml
+  device: !include ../../../packages/devices/guition-esp32-p4-jc8012p4a1/guition-esp32-p4-jc8012p4a1.yaml
+  theme: !include ui/theme.yaml
+  home_page: !include ui/home-page.yaml
+  clock_weather: !include ui/clock-weather.yaml
+  kindergarten: !include ui/kindergarten.yaml
+  now_playing: !include ui/now-playing.yaml
+  now_playing_page: !include ui/now-playing-page.yaml
+
+lvgl:
+  id: main_lvgl
+  displays: [tft_display]
+  touchscreens: [tft_touch]
+  buffer_size: 6%
+  # P4 software rotation: keep draw chunks on a cache-line-friendly boundary.
+  draw_rounding: 32
+  byte_order: little_endian
+  rotation: ${display_rotation}
+  bg_color: 0x000000
+
+# Touch: the device package uses ESPHome's native gsl3670 driver, which loads
+# Seeed reTerminal firmware and reported no touches on this panel. Replace it
+# (same id, so lvgl is unchanged) with the gsl3680 driver from
+# jtenniswood/esphome-media-player, which this board's hardware config is
+# based on. It loads the panel's own firmware and applies the vendor
+# point-id processing.
+external_components:
+  - source:
+      type: git
+      url: https://github.com/jtenniswood/esphome-media-player
+      ref: 8ab172b688861893db0cedc93abdb150932eccfc
+    components: [gsl3680]
+
+touchscreen:
+  - id: !remove tft_touch
+  - platform: gsl3680
+    id: tft_touch
+    i2c_id: i2c_bus_a
+    display: tft_display
+    reset_pin: GPIO22
+    interrupt_pin: GPIO21
+    transform:
+      mirror_x: true

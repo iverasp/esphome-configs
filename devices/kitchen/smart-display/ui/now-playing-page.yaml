@@ -1,0 +1,157 @@
+# Full-screen "now playing" page, opened by tapping the artwork on the home
+# page. Data is pushed in by now-playing.yaml.
+#
+#  +--------------------------------------------------------------+
+#  |                                                        [x]   |
+#  |   +--------------+                                           |
+#  |   |              |   Song title                              |
+#  |   |   artwork    |   Artist                                  |
+#  |   |   640x640    |   ━━━━━━━━━━━━━━━──────────               |
+#  |   |              |   1:23                      3:45          |
+#  |   |              |        [prev]  [play]  [next]             |
+#  |   +--------------+                                           |
+#  +--------------------------------------------------------------+
+
+lvgl:
+  pages:
+    - id: now_playing_page
+      bg_color: 0x000000
+      scrollable: false
+      widgets:
+        - obj:
+            align: LEFT_MID
+            x: 60
+            width: 640
+            height: 640
+            radius: 20
+            bg_color: 0x16181D
+            border_width: 0
+            pad_all: 0
+            clip_corner: true
+            scrollable: false
+            widgets:
+              - label:
+                  id: np_full_artwork_placeholder
+                  align: CENTER
+                  text: "\U000F075A"
+                  text_font: font_np_icons
+                  styles: style_muted
+              - image:
+                  id: np_full_artwork_widget
+                  align: CENTER
+                  src: np_full_artwork
+                  hidden: true
+
+        # Right-hand side: x 760..1220
+        - label:
+            id: np_full_title_label
+            x: 760
+            y: 250
+            width: 460
+            long_mode: dot
+            text: "Not playing"
+            text_font: font_m
+            styles: style_text
+        - label:
+            id: np_full_artist_label
+            x: 760
+            y: 296
+            width: 460
+            long_mode: dot
+            text: ""
+            text_font: font_s
+            styles: style_muted
+        - bar:
+            id: np_full_bar
+            x: 760
+            y: 360
+            width: 460
+            height: 8
+            min_value: 0
+            max_value: 1000
+            value: 0
+            bg_color: 0x2A2D34
+            indicator:
+              bg_color: 0xFFFFFF
+        - label:
+            id: np_full_pos_label
+            x: 760
+            y: 378
+            text: "-:--"
+            text_font: font_s
+            styles: style_muted
+        - label:
+            id: np_full_dur_label
+            align: TOP_RIGHT
+            x: -60
+            y: 378
+            text: "-:--"
+            text_font: font_s
+            styles: style_muted
+        - obj:
+            styles: style_transparent
+            x: 760
+            y: 440
+            width: 460
+            height: 100
+            scrollable: false
+            layout:
+              type: flex
+              flex_flow: ROW
+              flex_align_main: SPACE_EVENLY
+              flex_align_cross: CENTER
+            widgets:
+              - button:
+                  styles: style_icon_button
+                  width: 100
+                  height: 100
+                  radius: 50
+                  on_click:
+                    - media_player.previous: np_player
+                  widgets:
+                    - label:
+                        align: CENTER
+                        text: "\U000F04AE"
+                        text_font: font_np_controls_l
+              - button:
+                  styles: style_icon_button
+                  width: 100
+                  height: 100
+                  radius: 50
+                  on_click:
+                    - media_player.toggle: np_player
+                  widgets:
+                    - label:
+                        id: np_full_play_icon
+                        align: CENTER
+                        text: "\U000F040A"
+                        text_font: font_np_controls_l
+              - button:
+                  styles: style_icon_button
+                  width: 100
+                  height: 100
+                  radius: 50
+                  on_click:
+                    - media_player.next: np_player
+                  widgets:
+                    - label:
+                        align: CENTER
+                        text: "\U000F04AD"
+                        text_font: font_np_controls_l
+
+        # Close / minimise back to the home page.
+        - button:
+            styles: style_icon_button
+            align: TOP_RIGHT
+            x: -24
+            y: 24
+            width: 72
+            height: 72
+            radius: 36
+            on_click:
+              - script.execute: np_close_full
+            widgets:
+              - label:
+                  align: CENTER
+                  text: "\U000F0140"
+                  text_font: font_np_controls

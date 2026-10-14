@@ -1,0 +1,48 @@
+# Fonts, colours and shared LVGL styles for the kitchen smart display.
+
+font:
+  # bpp: 4 = 16 alpha levels per pixel (anti-aliased). Default is 1 (jagged).
+  - file:
+      type: gfonts
+      family: Roboto
+      weight: 400
+    id: font_m
+    size: 32
+    bpp: 4
+    glyphsets: [GF_Latin_Core]
+
+  - file:
+      type: gfonts
+      family: Roboto
+      weight: 400
+    id: font_s
+    size: 22
+    bpp: 4
+    glyphsets: [GF_Latin_Core]
+
+lvgl:
+  style_definitions:
+    - id: style_card
+      bg_color: 0x16181D
+      bg_opa: COVER
+      border_width: 0
+      radius: 24
+      pad_all: 20
+    - id: style_transparent
+      bg_opa: TRANSP
+      border_width: 0
+      pad_all: 0
+      radius: 0
+    - id: style_muted
+      text_color: 0x8A8F98
+    - id: style_text
+      text_color: 0xFFFFFF
+    # Borderless round icon button (media controls, close).
+    - id: style_icon_button
+      bg_color: 0xFFFFFF
+      bg_opa: TRANSP
+      border_width: 0
+      shadow_width: 0
+      radius: 28
+      pad_all: 0
+      text_color: 0xFFFFFF
