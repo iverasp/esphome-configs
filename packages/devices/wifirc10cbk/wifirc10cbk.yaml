@@ -1,0 +1,31 @@
+esphome:
+  name: ${device_name}
+  friendly_name: ${friendly_name}
+
+esp8266:
+  board: esp01_1m
+
+remote_transmitter:
+  pin: GPIO14
+  carrier_duty_percent: 30%
+
+remote_receiver:
+  id: rcvr
+  pin:
+    number: GPIO5
+    inverted: True
+  tolerance: 55%
+  dump: raw
+
+output:
+  - platform: esp8266_pwm
+    id: esphome_ir1_led
+    pin:
+      number: GPIO4
+      inverted: false
+
+light:
+  - platform: monochromatic
+    name: Status LED
+    output: esphome_ir1_led
+    id: light_led

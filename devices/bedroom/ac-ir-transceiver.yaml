@@ -1,0 +1,18 @@
+substitutions:
+  device_name: ac-ir-transceiver
+  friendly_name: AC IR Transceiver
+
+external_components:
+  - source: github://smazurov/esphome-ykh531e
+    components: [ykh531e]
+
+climate:
+  - platform: ykh531e
+    name: Bedroom AC
+    supports_cool: true
+    supports_heat: false
+    receiver_id: rcvr
+
+packages:
+  base: !include ../../packages/base.yaml
+  plug: !include ../../packages/devices/wifirc10cbk/wifirc10cbk.yaml
