@@ -1,0 +1,7 @@
+substitutions:
+  device_name: kids-room-voice-assistant
+  friendly_name: Kids room voice assistant
+
+packages:
+  base: !include ../../packages/base.yaml
+  device: !include ../../packages/devices/spotpear-ball-v2/spotpear-ball-v2.yaml
