@@ -1,0 +1,7 @@
+substitutions:
+  device_name: bedroom-voice-assistant
+  friendly_name: Bedroom voice assistant
+
+packages:
+  base: !include ../../packages/base.yaml
+  device: !include ../../packages/devices/waveshare-esp32-s3-audio/waveshare-esp32-s3-audio.yaml
